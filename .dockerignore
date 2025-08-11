@@ -1,0 +1,82 @@
+# Git相关
+.git
+.gitignore
+.gitattributes
+
+# Python相关
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env
+pip-log.txt
+pip-delete-this-directory.txt
+.tox
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.git
+.mypy_cache
+.pytest_cache
+.hypothesis
+
+# 虚拟环境
+venv/
+ENV/
+env/
+.venv/
+
+# IDE相关
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 操作系统相关
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# 项目特定
+.env
+*.db
+*.sqlite
+*.sqlite3
+uploads/*
+data/*
+updates/*
+backups/*
+logs/*
+*.log
+
+# 测试相关
+test_*.py
+*_test.py
+tests/
+.pytest_cache/
+
+# 文档
+README.md
+*.md
+docs/
+
+# 脚本
+quick_start.sh
+quick_start.bat
+start_bot.py
+
+# 其他
+*.tmp
+*.temp
+*.bak
+*.backup

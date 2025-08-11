@@ -1,21 +1,40 @@
 version: '3.8'
 
 services:
+  # Telegram Bot 主服务
   telegram-bot:
     build: .
     container_name: telegram-bot
     restart: unless-stopped
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
+      - ADMIN_IDS=${ADMIN_IDS}
+      - SUPER_ADMIN_ID=${SUPER_ADMIN_ID}
+      - ENABLE_PRIVATE_CHAT=${ENABLE_PRIVATE_CHAT:-true}
+      - MAX_PRIVATE_CHATS_PER_ADMIN=${MAX_PRIVATE_CHATS_PER_ADMIN:-10}
+      - DATABASE_URL=${DATABASE_URL:-data/bot.db}
+      - UPDATE_CHECK_URL=${UPDATE_CHECK_URL}
+      - AUTO_UPDATE=${AUTO_UPDATE:-false}
+      - UPDATE_INTERVAL=${UPDATE_INTERVAL:-3600}
       - UPLOAD_FOLDER=./uploads
-      - MAX_FILE_SIZE=50
+      - MAX_FILE_SIZE=${MAX_FILE_SIZE:-50}
+      - SUPPORTED_PHOTO_FORMATS=${SUPPORTED_PHOTO_FORMATS:-jpg,jpeg,png,gif}
+      - SUPPORTED_VIDEO_FORMATS=${SUPPORTED_VIDEO_FORMATS:-mp4,avi,mov}
+      - SUPPORTED_AUDIO_FORMATS=${SUPPORTED_AUDIO_FORMATS:-mp3,wav}
+      - SUPPORTED_DOCUMENT_FORMATS=${SUPPORTED_DOCUMENT_FORMATS:-pdf,doc,docx,txt}
     volumes:
       - ./uploads:/app/uploads
+      - ./data:/app/data
+      - ./updates:/app/updates
+      - ./backups:/app/backups
+      - ./logs:/app/logs
       - ./.env:/app/.env:ro
     ports:
       - "8443:8443"  # Webhook端口
     networks:
       - bot-network
+    depends_on:
+      - redis
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8443/health')"]
       interval: 30s
@@ -23,32 +42,100 @@ services:
       retries: 3
       start_period: 40s
 
-  # Webhook模式（可选）
-  telegram-bot-webhook:
-    build: .
-    container_name: telegram-bot-webhook
+  # Redis缓存服务
+  redis:
+    image: redis:7-alpine
+    container_name: bot-redis
     restart: unless-stopped
-    environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - WEBHOOK_URL=${WEBHOOK_URL}
-      - WEBHOOK_PORT=8443
-      - UPLOAD_FOLDER=./uploads
-      - MAX_FILE_SIZE=50
-    volumes:
-      - ./uploads:/app/uploads
-      - ./.env:/app/.env:ro
     ports:
-      - "8444:8443"  # 使用不同端口避免冲突
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: redis-server /usr/local/etc/redis/redis.conf
     networks:
       - bot-network
-    command: ["python", "start_bot.py", "--mode", "webhook"]
-    profiles:
-      - webhook
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL数据库服务（可选，替代SQLite）
+  postgres:
+    image: postgres:15-alpine
+    container_name: bot-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=telegram_bot
+      - POSTGRES_USER=bot_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-bot_password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bot_user -d telegram_bot"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx反向代理（用于生产环境）
+  nginx:
+    image: nginx:alpine
+    container_name: bot-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./logs:/var/log/nginx
+    networks:
+      - bot-network
+    depends_on:
+      - telegram-bot
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 监控服务
+  monitoring:
+    image: prom/prometheus:latest
+    container_name: bot-monitoring
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - bot-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
 
 networks:
   bot-network:
     driver: bridge
-
-volumes:
-  uploads:
-    driver: local
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

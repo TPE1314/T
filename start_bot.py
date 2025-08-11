@@ -1,106 +1,102 @@
 #!/usr/bin/env python3
 """
 Telegram Bot 启动脚本
-支持轮询和Webhook两种模式
+支持多种启动模式和配置选项
 """
 
-import os
-import sys
 import asyncio
 import argparse
-from dotenv import load_dotenv
+import logging
+import os
+import sys
+from pathlib import Path
 
-# 加载环境变量
-load_dotenv()
+# 添加项目根目录到Python路径
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-def check_environment():
-    """检查环境配置"""
-    bot_token = os.getenv('BOT_TOKEN')
-    if not bot_token:
-        print("❌ 错误: 未设置BOT_TOKEN环境变量")
-        print("请复制 env_example.txt 为 .env 并填写正确的配置")
-        return False
-    
-    print("✅ 环境配置检查通过")
-    return True
+from bot import TelegramBot
+import config
 
-def check_dependencies():
-    """检查依赖包"""
-    try:
-        import telegram
-        import aiohttp
-        print("✅ 依赖包检查通过")
-        return True
-    except ImportError as e:
-        print(f"❌ 错误: 缺少依赖包 - {e}")
-        print("请运行: pip install -r requirements.txt")
-        return False
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('bot.log', encoding='utf-8'),
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 
-async def start_polling_mode():
-    """启动轮询模式"""
-    print("🚀 启动轮询模式...")
-    from bot import TelegramBot
-    
-    bot = TelegramBot()
-    await bot.start_polling()
+logger = logging.getLogger(__name__)
 
-async def start_webhook_mode():
-    """启动Webhook模式"""
-    webhook_url = os.getenv('WEBHOOK_URL')
-    if not webhook_url:
-        print("❌ 错误: Webhook模式需要设置WEBHOOK_URL环境变量")
-        return False
-    
-    print("🚀 启动Webhook模式...")
-    from webhook_server import WebhookServer
-    
-    server = WebhookServer()
-    await server.start_server()
-    return True
-
-def main():
+async def main():
     """主函数"""
     parser = argparse.ArgumentParser(description='Telegram Bot 启动脚本')
-    parser.add_argument(
-        '--mode', 
-        choices=['polling', 'webhook'], 
-        default='polling',
-        help='运行模式: polling(轮询) 或 webhook(Webhook)'
-    )
-    parser.add_argument(
-        '--check-only',
-        action='store_true',
-        help='仅检查环境配置，不启动机器人'
-    )
+    parser.add_argument('--mode', choices=['polling', 'webhook'], default='polling',
+                       help='启动模式: polling 或 webhook (默认: polling)')
+    parser.add_argument('--config', default='.env',
+                       help='配置文件路径 (默认: .env)')
+    parser.add_argument('--debug', action='store_true',
+                       help='启用调试模式')
+    parser.add_argument('--port', type=int, default=8443,
+                       help='Webhook端口 (默认: 8443)')
+    parser.add_argument('--host', default='0.0.0.0',
+                       help='Webhook主机地址 (默认: 0.0.0.0)')
     
     args = parser.parse_args()
     
-    print("🤖 Telegram Bot 启动器")
-    print("=" * 40)
+    # 设置调试模式
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logger.info("调试模式已启用")
     
-    # 检查环境
-    if not check_environment():
-        sys.exit(1)
+    # 检查配置文件
+    if not os.path.exists(args.config):
+        logger.error(f"配置文件 {args.config} 不存在")
+        logger.info("请复制 env_example.txt 为 .env 并填写配置")
+        return 1
     
-    # 检查依赖
-    if not check_dependencies():
-        sys.exit(1)
+    # 检查必要的配置
+    if not config.BOT_TOKEN:
+        logger.error("BOT_TOKEN 未配置")
+        return 1
     
-    if args.check_only:
-        print("✅ 环境检查完成，机器人未启动")
-        return
+    if not config.ADMIN_IDS:
+        logger.error("ADMIN_IDS 未配置")
+        return 1
     
-    # 启动机器人
+    if not config.SUPER_ADMIN_ID:
+        logger.error("SUPER_ADMIN_ID 未配置")
+        return 1
+    
     try:
+        # 创建机器人实例
+        bot = TelegramBot()
+        logger.info("机器人初始化成功")
+        
         if args.mode == 'polling':
-            asyncio.run(start_polling_mode())
+            logger.info("启动轮询模式...")
+            await bot.start_polling()
         else:
-            asyncio.run(start_webhook_mode())
+            logger.info(f"启动Webhook模式，监听 {args.host}:{args.port}")
+            await bot.start_webhook(host=args.host, port=args.port)
+            
     except KeyboardInterrupt:
-        print("\n👋 机器人已停止")
+        logger.info("收到中断信号，正在关闭机器人...")
     except Exception as e:
-        print(f"❌ 启动失败: {e}")
-        sys.exit(1)
+        logger.error(f"启动失败: {e}")
+        return 1
+    
+    return 0
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    try:
+        exit_code = asyncio.run(main())
+        sys.exit(exit_code)
+    except KeyboardInterrupt:
+        logger.info("程序被用户中断")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"程序异常退出: {e}")
+        sys.exit(1)
