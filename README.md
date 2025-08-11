@@ -31,18 +31,60 @@
 
 ## 🚀 快速开始
 
-### 1. 获取Bot Token
+### 方法1：Ubuntu一键部署（推荐）
+
+#### 1. 获取Bot Token
 1. 在Telegram中搜索 `@BotFather`
 2. 发送 `/newbot` 命令
 3. 按提示设置机器人名称和用户名
 4. 复制获得的Bot Token
 
-### 2. 安装依赖
+#### 2. 运行部署脚本
+```bash
+# 快速部署（开发测试）
+wget https://raw.githubusercontent.com/your-repo/your-project/main/quick_deploy.sh
+chmod +x quick_deploy.sh
+./quick_deploy.sh
+
+# 或完整部署（生产环境）
+wget https://raw.githubusercontent.com/your-repo/your-project/main/ubuntu_deploy.sh
+chmod +x ubuntu_deploy.sh
+./ubuntu_deploy.sh
+```
+
+#### 3. 配置环境变量
+部署完成后，编辑配置文件：
+```bash
+nano /home/$(whoami)/telegram-bot/.env
+```
+
+填入您的Bot Token：
+```env
+BOT_TOKEN=your_bot_token_here
+ADMIN_IDS=your_admin_id
+SUPER_ADMIN_ID=your_super_admin_id
+```
+
+#### 4. 启动服务
+```bash
+sudo systemctl start telegram-bot
+sudo systemctl enable telegram-bot
+```
+
+### 方法2：传统安装
+
+#### 1. 获取Bot Token
+1. 在Telegram中搜索 `@BotFather`
+2. 发送 `/newbot` 命令
+3. 按提示设置机器人名称和用户名
+4. 复制获得的Bot Token
+
+#### 2. 安装依赖
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 配置环境变量
+#### 3. 配置环境变量
 复制 `env_example.txt` 为 `.env` 并填写配置：
 ```bash
 cp env_example.txt .env
@@ -55,14 +97,14 @@ UPLOAD_FOLDER=./uploads
 MAX_FILE_SIZE=50
 ```
 
-### 4. 运行机器人
+#### 4. 运行机器人
 
-#### 轮询模式（推荐用于开发测试）
+##### 轮询模式（推荐用于开发测试）
 ```bash
 python bot.py
 ```
 
-#### Webhook模式（推荐用于生产环境）
+##### Webhook模式（推荐用于生产环境）
 ```bash
 python webhook_server.py
 ```
@@ -71,23 +113,55 @@ python webhook_server.py
 
 ```
 telegram-bot/
-├── bot.py              # 主机器人文件
-├── handlers.py         # 消息处理器
-├── config.py           # 配置文件
-├── utils.py            # 工具函数
-├── admin_manager.py    # 管理员管理器
-├── database.py         # 数据库管理
-├── update_manager.py   # 更新管理器
-├── webhook_server.py   # Webhook服务器
-├── requirements.txt    # Python依赖
-├── env_example.txt     # 环境变量示例
-├── README.md          # 项目说明
-├── start_bot.py       # 启动脚本
-├── quick_start.sh     # Linux/macOS快速启动脚本
-├── quick_start.bat    # Windows快速启动脚本
-├── uploads/           # 文件上传目录
-├── data/              # 数据库目录
-└── updates/           # 更新文件目录
+├── 📱 核心文件
+│   ├── bot.py              # 主机器人文件
+│   ├── handlers.py         # 消息处理器
+│   ├── config.py           # 配置文件
+│   ├── utils.py            # 工具函数
+│   ├── admin_manager.py    # 管理员管理器
+│   ├── database.py         # 数据库管理
+│   ├── update_manager.py   # 更新管理器
+│   └── webhook_server.py   # Webhook服务器
+│
+├── 🚀 部署脚本
+│   ├── ubuntu_deploy.sh    # Ubuntu完整部署脚本
+│   ├── quick_deploy.sh     # Ubuntu快速部署脚本
+│   ├── test_deployment.sh  # 部署测试脚本
+│   ├── docker_deploy.sh    # Docker部署脚本
+│   └── docker_deploy.bat   # Windows Docker部署脚本
+│
+├── 📋 配置文件
+│   ├── requirements.txt     # Python依赖
+│   ├── env_example.txt     # 环境变量示例
+│   ├── docker-compose.yml  # Docker Compose配置
+│   ├── Dockerfile          # Docker镜像配置
+│   └── nginx.conf          # Nginx配置模板
+│
+├── 📚 文档
+│   ├── README.md           # 项目说明
+│   ├── UBUNTU_DEPLOY_README.md # Ubuntu部署说明
+│   ├── DEPLOYMENT.md       # 部署指南
+│   ├── PROJECT_STRUCTURE.md # 项目结构说明
+│   └── STARTUP_GUIDE.md    # 启动指南
+│
+├── 🛠️ 工具脚本
+│   ├── start_bot.py        # 启动脚本
+│   ├── quick_start.sh      # Linux/macOS快速启动脚本
+│   ├── quick_start.bat     # Windows快速启动脚本
+│   └── health_check.py     # 健康检查脚本
+│
+├── 📁 数据目录
+│   ├── uploads/            # 文件上传目录
+│   ├── data/               # 数据库目录
+│   ├── updates/            # 更新文件目录
+│   ├── logs/               # 日志文件目录
+│   ├── backups/            # 备份文件目录
+│   └── monitoring/         # 监控脚本目录
+│
+└── 🔧 其他文件
+    ├── .gitignore          # Git忽略文件
+    ├── .dockerignore       # Docker忽略文件
+    └── redis.conf          # Redis配置模板
 ```
 
 ## ⚙️ 配置说明
@@ -162,7 +236,41 @@ telegram-bot/
 
 ## 🌐 部署选项
 
-### 本地部署
+### 1. Ubuntu一键部署（推荐）
+
+我们提供了完整的Ubuntu部署脚本，支持一键安装所有依赖和服务：
+
+#### 快速部署（开发测试）
+```bash
+# 下载并运行快速部署脚本
+wget https://raw.githubusercontent.com/your-repo/your-project/main/quick_deploy.sh
+chmod +x quick_deploy.sh
+./quick_deploy.sh
+```
+
+#### 完整部署（生产环境）
+```bash
+# 下载并运行完整部署脚本
+wget https://raw.githubusercontent.com/your-repo/your-project/main/ubuntu_deploy.sh
+chmod +x ubuntu_deploy.sh
+./ubuntu_deploy.sh
+```
+
+#### 部署测试
+```bash
+# 部署完成后，运行测试脚本验证
+./test_deployment.sh
+```
+
+**Ubuntu部署脚本特性：**
+- ✅ 自动安装系统依赖（Python、Redis、Nginx等）
+- ✅ 创建Python虚拟环境
+- ✅ 配置系统服务（systemd）
+- ✅ 自动配置防火墙和日志轮转
+- ✅ 包含备份和监控脚本
+- ✅ 支持可选安装MySQL、MongoDB、Docker
+
+### 2. 本地部署
 ```bash
 # 安装依赖
 pip install -r requirements.txt
@@ -175,24 +283,32 @@ cp env_example.txt .env
 python bot.py
 ```
 
-### Docker部署
-```dockerfile
-FROM python:3.9-slim
+### 3. Docker部署
+```bash
+# 使用Docker Compose
+docker-compose up -d
 
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY . .
-CMD ["python", "bot.py"]
+# 或使用Dockerfile
+docker build -t telegram-bot .
+docker run -d --name bot telegram-bot
 ```
 
-### 云服务器部署
+### 4. 云服务器部署
 1. 上传代码到服务器
 2. 安装Python和依赖
 3. 配置环境变量
 4. 使用systemd或supervisor管理进程
 5. 配置反向代理（Webhook模式）
+
+### 5. 部署脚本对比
+
+| 功能 | 快速部署 | 完整部署 | Docker部署 |
+|------|----------|----------|------------|
+| 安装速度 | ⚡ 快速 | 🐌 完整 | 🚀 快速 |
+| 功能完整性 | 🔧 基础 | 🎯 完整 | 🐳 容器化 |
+| 系统集成 | ✅ 基础 | ✅ 完整 | ❌ 独立 |
+| 维护便利性 | ⭐ 简单 | ⭐⭐⭐ 完善 | ⭐⭐ 中等 |
+| 适用场景 | 开发测试 | 生产环境 | 容器环境 |
 
 ## 📊 监控和日志
 
@@ -229,16 +345,93 @@ A: 检查网络连接，确认文件大小未超过限制
 **Q: Webhook模式无法工作？**
 A: 检查WEBHOOK_URL和端口配置，确认服务器可访问
 
+**Q: Ubuntu部署后服务无法启动？**
+A: 检查服务状态：`sudo systemctl status telegram-bot`，查看日志：`sudo journalctl -u telegram-bot -f`
+
+**Q: 部署脚本执行失败？**
+A: 确保使用普通用户（非root）运行，检查sudo权限，查看错误日志
+
+**Q: Redis连接失败？**
+A: 检查Redis服务状态：`sudo systemctl status redis-server`，测试连接：`redis-cli ping`
+
+**Q: Nginx无法访问？**
+A: 检查Nginx状态：`sudo systemctl status nginx`，检查防火墙配置：`sudo ufw status`
+
 ### 日志查看
+
+#### 应用日志
 ```bash
 # 查看实时日志
 tail -f bot.log
 
 # 查看错误日志
 grep ERROR bot.log
+
+# 查看系统服务日志
+sudo journalctl -u telegram-bot -f
+```
+
+#### 系统日志
+```bash
+# Nginx日志
+sudo tail -f /var/log/nginx/error.log
+
+# Redis日志
+sudo tail -f /var/log/redis/redis-server.log
+
+# 系统日志
+sudo tail -f /var/log/syslog
+```
+
+### Ubuntu部署故障排除
+
+#### 1. 服务状态检查
+```bash
+# 检查所有相关服务
+sudo systemctl status telegram-bot redis-server nginx
+
+# 检查端口监听
+sudo netstat -tlnp | grep -E ':(80|443|6379|8443)'
+```
+
+#### 2. 权限问题修复
+```bash
+# 修复文件权限
+sudo chown -R $(whoami):$(whoami) /home/$(whoami)/telegram-bot/
+sudo chmod -R 755 /home/$(whoami)/telegram-bot/
+```
+
+#### 3. 重新部署
+```bash
+# 停止服务
+sudo systemctl stop telegram-bot
+
+# 清理并重新部署
+sudo rm -rf /home/$(whoami)/telegram-bot/
+./ubuntu_deploy.sh
+```
+
+#### 4. 运行测试脚本
+```bash
+# 验证部署
+./test_deployment.sh
 ```
 
 ## 📝 更新日志
+
+### v2.1.0
+- 🆕 新增Ubuntu一键部署脚本
+  - `ubuntu_deploy.sh` - 完整版部署脚本（生产环境）
+  - `quick_deploy.sh` - 快速部署脚本（开发测试）
+  - `test_deployment.sh` - 部署测试脚本
+- 🆕 自动系统配置
+  - 自动安装Python、Redis、Nginx等依赖
+  - 自动配置防火墙、日志轮转、备份脚本
+  - 支持可选安装MySQL、MongoDB、Docker
+- 🆕 系统服务集成
+  - 创建systemd服务，支持开机自启
+  - 创建专用服务用户，提高安全性
+  - 集成监控和健康检查
 
 ### v2.0.0
 - 新增多管理员支持
