@@ -12,9 +12,13 @@
 ### 前置要求
 
 - Ubuntu 18.04 或更高版本
-- 普通用户账户（非root用户）
+- 普通用户账户（具有sudo权限）或root用户
 - 网络连接
-- sudo权限
+- 如果使用普通用户，需要sudo权限
+
+### ⚠️ 关于root用户
+
+脚本支持root用户运行，但会显示警告提示。生产环境建议使用普通用户+sudo权限的方式，这样更安全。
 
 ### 方法1：快速部署（推荐新手）
 
@@ -63,7 +67,12 @@ chmod +x ubuntu_deploy.sh
 ## 📁 部署后的目录结构
 
 ```
+# 普通用户部署路径
 /home/用户名/telegram-bot/
+
+# root用户部署路径  
+/root/telegram-bot/
+
 ├── app/                    # 应用代码
 ├── static/                 # 静态文件
 ├── uploads/                # 上传文件
@@ -86,6 +95,7 @@ chmod +x ubuntu_deploy.sh
 
 ```bash
 # 查看服务状态
+# 普通用户使用 sudo，root用户直接运行
 sudo systemctl status telegram-bot
 
 # 启动服务
@@ -122,7 +132,11 @@ sudo ufw status
 
 ```bash
 # 编辑配置文件
+# 普通用户
 nano /home/用户名/telegram-bot/.env
+
+# root用户
+nano /root/telegram-bot/.env
 
 # 主要配置项
 BOT_TOKEN=your_bot_token_here
@@ -203,9 +217,13 @@ REDIS_URL = "redis://localhost:6379/0"
 
 2. **权限问题**
    ```bash
-   # 修复文件权限
+   # 普通用户修复文件权限
    sudo chown -R 用户名:用户名 /home/用户名/telegram-bot/
    sudo chmod -R 755 /home/用户名/telegram-bot/
+   
+   # root用户修复文件权限
+   chown -R root:root /root/telegram-bot/
+   chmod -R 755 /root/telegram-bot/
    ```
 
 3. **端口冲突**
@@ -226,7 +244,9 @@ REDIS_URL = "redis://localhost:6379/0"
 
 ### 日志位置
 
-- 应用日志：`/home/用户名/telegram-bot/logs/`
+- 应用日志：
+  - 普通用户：`/home/用户名/telegram-bot/logs/`
+  - root用户：`/root/telegram-bot/logs/`
 - 系统日志：`/var/log/syslog`
 - Nginx日志：`/var/log/nginx/`
 - Redis日志：`/var/log/redis/`
@@ -236,9 +256,15 @@ REDIS_URL = "redis://localhost:6379/0"
 ### 更新代码
 
 ```bash
+# 普通用户
 cd /home/用户名/telegram-bot/
 git pull origin main
 sudo systemctl restart telegram-bot
+
+# root用户
+cd /root/telegram-bot/
+git pull origin main
+systemctl restart telegram-bot
 ```
 
 ### 更新依赖
@@ -275,7 +301,7 @@ sudo systemctl restart telegram-bot
 
 ## ⚠️ 注意事项
 
-1. **不要使用root用户运行脚本**
+1. **root用户使用警告**：虽然脚本支持root用户，但生产环境建议使用普通用户+sudo权限
 2. **生产环境建议使用完整版脚本**
 3. **定期备份重要数据**
 4. **及时更新系统和依赖**

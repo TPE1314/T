@@ -447,13 +447,13 @@ EOF
 configure_firewall() {
     log_step "配置防火墙..."
     
-    sudo ufw --force enable
-    sudo ufw default deny incoming
-    sudo ufw default allow outgoing
-    sudo ufw allow ssh
-    sudo ufw allow 80/tcp
-    sudo ufw allow 443/tcp
-    sudo ufw allow 8443/tcp
+    $SUDO_CMD ufw --force enable
+    $SUDO_CMD ufw default deny incoming
+    $SUDO_CMD ufw default allow outgoing
+    $SUDO_CMD ufw allow ssh
+    $SUDO_CMD ufw allow 80/tcp
+    $SUDO_CMD ufw allow 443/tcp
+    $SUDO_CMD ufw allow 8443/tcp
     
     log_success "防火墙配置完成"
 }
@@ -462,7 +462,7 @@ configure_firewall() {
 configure_logrotate() {
     log_step "配置日志轮转..."
     
-    sudo tee /etc/logrotate.d/$PROJECT_NAME > /dev/null <<EOF
+    $SUDO_CMD tee /etc/logrotate.d/$PROJECT_NAME > /dev/null <<EOF
 $PROJECT_DIR/logs/*.log {
     daily
     missingok
@@ -484,7 +484,7 @@ EOF
 create_backup_script() {
     log_step "创建备份脚本..."
     
-    sudo tee $PROJECT_DIR/backup.sh > /dev/null <<EOF
+    $SUDO_CMD tee $PROJECT_DIR/backup.sh > /dev/null <<EOF
 #!/bin/bash
 # 备份脚本
 
@@ -501,11 +501,11 @@ find \$BACKUP_DIR -name "backup_*.tar.gz" -mtime +30 -delete
 echo "备份完成: \$BACKUP_FILE"
 EOF
     
-    sudo chmod +x $PROJECT_DIR/backup.sh
-    sudo chown $SERVICE_USER:$SERVICE_USER $PROJECT_DIR/backup.sh
+    $SUDO_CMD chmod +x $PROJECT_DIR/backup.sh
+    $SUDO_CMD chown $SERVICE_USER:$SERVICE_USER $PROJECT_DIR/backup.sh
     
     # 添加到crontab
-    (sudo crontab -l 2>/dev/null; echo "0 2 * * * $PROJECT_DIR/backup.sh") | sudo crontab -
+    ($SUDO_CMD crontab -l 2>/dev/null; echo "0 2 * * * $PROJECT_DIR/backup.sh") | $SUDO_CMD crontab -
     
     log_success "备份脚本创建完成"
 }
@@ -514,7 +514,7 @@ EOF
 create_monitoring_script() {
     log_step "创建监控脚本..."
     
-    sudo tee $PROJECT_DIR/monitor.sh > /dev/null <<EOF
+    $SUDO_CMD tee $PROJECT_DIR/monitor.sh > /dev/null <<EOF
 #!/bin/bash
 # 监控脚本
 
@@ -546,11 +546,11 @@ if [ \$MEM_USAGE -gt 80 ]; then
 fi
 EOF
     
-    sudo chmod +x $PROJECT_DIR/monitor.sh
-    sudo chown $SERVICE_USER:$SERVICE_USER $PROJECT_DIR/monitor.sh
+    $SUDO_CMD chmod +x $PROJECT_DIR/monitor.sh
+    $SUDO_CMD chown $SERVICE_USER:$SERVICE_USER $PROJECT_DIR/monitor.sh
     
     # 添加到crontab，每5分钟检查一次
-    (sudo crontab -l 2>/dev/null; echo "*/5 * * * * $PROJECT_DIR/monitor.sh") | sudo crontab -
+    ($SUDO_CMD crontab -l 2>/dev/null; echo "*/5 * * * * $PROJECT_DIR/monitor.sh") | $SUDO_CMD crontab -
     
     log_success "监控脚本创建完成"
 }
@@ -563,8 +563,8 @@ copy_project_files() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     # 复制项目文件
-    sudo cp -r $SCRIPT_DIR/* $PROJECT_DIR/
-    sudo chown -R $SERVICE_USER:$SERVICE_USER $PROJECT_DIR
+    $SUDO_CMD cp -r $SCRIPT_DIR/* $PROJECT_DIR/
+    $SUDO_CMD chown -R $SERVICE_USER:$SERVICE_USER $PROJECT_DIR
     
     log_success "项目文件复制完成"
 }
@@ -573,9 +573,9 @@ copy_project_files() {
 start_services() {
     log_step "启动服务..."
     
-    sudo systemctl start $PROJECT_NAME
-    sudo systemctl start redis-server
-    sudo systemctl start nginx
+    $SUDO_CMD systemctl start $PROJECT_NAME
+    $SUDO_CMD systemctl start redis-server
+    $SUDO_CMD systemctl start nginx
     
     # 等待服务启动
     sleep 5
@@ -585,7 +585,7 @@ start_services() {
         log_success "Bot服务启动成功"
     else
         log_error "Bot服务启动失败"
-        sudo systemctl status $PROJECT_NAME
+        $SUDO_CMD systemctl status $PROJECT_NAME
     fi
     
     if systemctl is-active --quiet redis-server; then
@@ -609,11 +609,11 @@ show_deployment_info() {
     echo "👤 服务用户: $SERVICE_USER"
     echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}')"
     echo "🔧 管理命令:"
-    echo "   - 查看状态: sudo systemctl status $PROJECT_NAME"
-    echo "   - 启动服务: sudo systemctl start $PROJECT_NAME"
-    echo "   - 停止服务: sudo systemctl stop $PROJECT_NAME"
-    echo "   - 重启服务: sudo systemctl restart $PROJECT_NAME"
-    echo "   - 查看日志: sudo journalctl -u $PROJECT_NAME -f"
+    echo "   - 查看状态: $SUDO_CMD systemctl status $PROJECT_NAME"
+    echo "   - 启动服务: $SUDO_CMD systemctl start $PROJECT_NAME"
+    echo "   - 停止服务: $SUDO_CMD systemctl stop $PROJECT_NAME"
+    echo "   - 重启服务: $SUDO_CMD systemctl restart $PROJECT_NAME"
+    echo "   - 查看日志: $SUDO_CMD journalctl -u $PROJECT_NAME -f"
     echo "   - 备份数据: $PROJECT_DIR/backup.sh"
     echo ""
     echo "📋 下一步操作:"
