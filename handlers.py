@@ -15,6 +15,8 @@ from utils import (
     generate_filename, ensure_directory_exists, format_duration
 )
 from admin_manager import admin_manager
+from database import db, User, Message, Reply
+from update_manager import update_manager
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,17 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 更新管理员活动状态
     if is_admin:
         admin_manager.update_admin_activity(user.id)
+    
+    # 添加或更新用户到数据库
+    user_info = User(
+        user_id=user.id,
+        username=user.username or f"user_{user.id}",
+        first_name=user.first_name or "",
+        last_name=user.last_name or "",
+        join_date=datetime.now().isoformat(),
+        last_active=datetime.now().isoformat()
+    )
+    await db.add_user(user_info)
     
     welcome_text = f"👋 欢迎 {user.first_name}！\n\n"
     
@@ -272,6 +285,20 @@ async def handle_echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.info(f"收到来自用户 {user.id} 的文本消息: {text}")
     
+    # 记录消息到数据库
+    message = Message(
+        message_id=update.message.message_id,
+        user_id=user.id,
+        chat_id=chat_id,
+        message_type="text",
+        content=text,
+        timestamp=datetime.now().isoformat()
+    )
+    await db.add_message(message)
+    
+    # 更新用户活动时间
+    await db.update_user_activity(user.id)
+    
     # 检查是否为私聊
     if chat_id == user.id:  # 私聊
         # 检查用户是否与管理员有私聊
@@ -283,8 +310,16 @@ async def handle_echo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 admin_info = admin_manager.get_admin_info(admin_id)
                 if admin_info:
                     forward_text = f"💬 来自用户 {user.first_name} (@{user.username or '无用户名'}) 的消息:\n\n{text}"
+                    
+                    # 创建回复按钮
+                    keyboard = [
+                        [InlineKeyboardButton("💬 回复", callback_data=f"reply_{update.message.message_id}")],
+                        [InlineKeyboardButton("📋 查看历史", callback_data=f"history_{user.id}")]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
                     try:
-                        await context.bot.send_message(admin_id, forward_text)
+                        await context.bot.send_message(admin_id, forward_text, reply_markup=reply_markup)
                         await update.message.reply_text("✅ 消息已发送给管理员")
                     except Exception as e:
                         logger.error(f"转发消息失败: {e}")
@@ -844,6 +879,78 @@ async def handle_contact_callback(update: Update, context: ContextTypes.DEFAULT_
     
     elif data == "cancel_chat":
         await query.edit_message_text("❌ 已取消选择管理员")
+    
+    # 新增的回调处理功能
+    elif data.startswith("reply_"):
+        await handle_reply_message(update, context)
+    
+    elif data.startswith("history_"):
+        await handle_view_history(update, context)
+    
+    elif data.startswith("start_private_"):
+        await handle_start_private(update, context)
+    
+    elif data.startswith("user_stats_"):
+        await handle_user_stats(update, context)
+    
+    elif data == "perform_update":
+        await handle_perform_update(update, context)
+    
+    elif data == "update_details":
+        await query.edit_message_text("📋 更新详情功能开发中...")
+    
+    elif data.startswith("script_"):
+        await handle_script_generation(update, context)
+    
+    # 文件管理回调
+    elif data.startswith("view_file_"):
+        filename = data.split("_", 2)[2]
+        file_path = os.path.join(config.UPLOAD_FOLDER, filename)
+        
+        if os.path.exists(file_path):
+            try:
+                await context.bot.send_document(
+                    chat_id=query.from_user.id,
+                    document=open(file_path, 'rb'),
+                    caption=f"📁 文件: {filename}"
+                )
+                await query.answer("✅ 文件已发送")
+            except Exception as e:
+                logger.error(f"发送文件失败: {e}")
+                await query.answer("❌ 发送文件失败")
+        else:
+            await query.answer("❌ 文件不存在")
+    
+    elif data.startswith("delete_file_"):
+        filename = data.split("_", 2)[2]
+        file_path = os.path.join(config.UPLOAD_FOLDER, filename)
+        
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                await query.edit_message_text(f"🗑️ 文件 {filename} 已删除")
+                await query.answer("✅ 文件已删除")
+            except Exception as e:
+                logger.error(f"删除文件失败: {e}")
+                await query.answer("❌ 删除文件失败")
+        else:
+            await query.answer("❌ 文件不存在")
+    
+    # 聊天管理回调
+    elif data.startswith("view_chat_"):
+        user_id = int(data.split("_", 2)[2])
+        await query.edit_message_text(f"💬 查看与用户 {user_id} 的聊天记录...")
+        # 这里可以添加查看聊天记录的逻辑
+    
+    elif data.startswith("view_request_"):
+        user_id = int(data.split("_", 2)[2])
+        await query.edit_message_text(f"📋 查看用户 {user_id} 的请求详情...")
+        # 这里可以添加查看请求详情的逻辑
+    
+    elif data.startswith("manage_admin_"):
+        admin_id = int(data.split("_", 2)[2])
+        await query.edit_message_text(f"⚙️ 管理管理员 {admin_id}...")
+        # 这里可以添加管理员的逻辑
 
 async def handle_manage_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """处理管理私聊"""
@@ -924,3 +1031,374 @@ async def handle_manage_admins(update: Update, context: ContextTypes.DEFAULT_TYP
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.callback_query.edit_message_text(admin_text, reply_markup=reply_markup)
+
+async def handle_reply_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理管理员回复消息"""
+    user = update.effective_user
+    query = update.callback_query
+    
+    if not admin_manager.is_admin(user.id):
+        await query.answer("❌ 您没有权限执行此操作")
+        return
+    
+    # 解析消息ID
+    try:
+        message_id = int(query.data.split('_')[1])
+    except (IndexError, ValueError):
+        await query.answer("❌ 无效的消息ID")
+        return
+    
+    # 获取消息信息
+    message, replies = await db.get_message_with_replies(message_id)
+    if not message:
+        await query.answer("❌ 消息不存在")
+        return
+    
+    # 获取用户信息
+    user_info = await db.get_user(message.user_id)
+    if not user_info:
+        await query.answer("❌ 用户信息不存在")
+        return
+    
+    # 创建回复界面
+    reply_text = f"💬 回复用户 {user_info.first_name} (@{user_info.username})\n\n"
+    reply_text += f"📝 原消息: {message.content}\n"
+    reply_text += f"⏰ 时间: {message.timestamp}\n\n"
+    
+    if replies:
+        reply_text += "📋 回复历史:\n"
+        for i, reply in enumerate(replies, 1):
+            reply_text += f"{i}. {reply.content} ({reply.timestamp})\n"
+    
+    reply_text += "\n💡 请直接发送回复内容"
+    
+    # 存储回复状态
+    context.user_data['replying_to'] = message_id
+    context.user_data['reply_user_id'] = message.user_id
+    
+    await query.edit_message_text(reply_text)
+    await query.answer("请发送回复内容")
+
+async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理管理员的回复内容"""
+    user = update.effective_user
+    text = update.message.text
+    
+    if not admin_manager.is_admin(user.id):
+        return
+    
+    # 检查是否在回复状态
+    if 'replying_to' not in context.user_data:
+        return
+    
+    message_id = context.user_data['replying_to']
+    reply_user_id = context.user_data['reply_user_id']
+    
+    # 创建回复记录
+    reply = Reply(
+        reply_id=0,  # 数据库自动生成
+        original_message_id=message_id,
+        admin_id=user.id,
+        content=text,
+        message_type="text",
+        timestamp=datetime.now().isoformat()
+    )
+    
+    # 保存回复到数据库
+    if await db.add_reply(reply):
+        # 发送回复给用户
+        try:
+            reply_text = f"💬 管理员回复:\n\n{text}"
+            await context.bot.send_message(reply_user_id, reply_text)
+            
+            # 通知管理员
+            await update.message.reply_text("✅ 回复已发送给用户")
+            
+            # 清除回复状态
+            del context.user_data['replying_to']
+            del context.user_data['reply_user_id']
+            
+        except Exception as e:
+            logger.error(f"发送回复失败: {e}")
+            await update.message.reply_text("❌ 发送回复失败，请稍后重试")
+    else:
+        await update.message.reply_text("❌ 保存回复失败")
+
+async def handle_view_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """查看用户聊天历史"""
+    user = update.effective_user
+    query = update.callback_query
+    
+    if not admin_manager.is_admin(user.id):
+        await query.answer("❌ 您没有权限执行此操作")
+        return
+    
+    # 解析用户ID
+    try:
+        user_id = int(query.data.split('_')[1])
+    except (IndexError, ValueError):
+        await query.answer("❌ 无效的用户ID")
+        return
+    
+    # 获取用户信息
+    user_info = await db.get_user(user_id)
+    if not user_info:
+        await query.answer("❌ 用户信息不存在")
+        return
+    
+    # 获取用户消息历史
+    messages = await db.get_user_messages(user_id, limit=20)
+    
+    if not messages:
+        await query.answer("该用户暂无消息记录")
+        return
+    
+    # 创建历史记录显示
+    history_text = f"📋 用户 {user_info.first_name} (@{user_info.username}) 的聊天历史\n\n"
+    
+    for i, msg in enumerate(messages[:10], 1):  # 只显示最近10条
+        timestamp = msg.timestamp.split('T')[0] if 'T' in msg.timestamp else msg.timestamp
+        status = "✅ 已回复" if msg.is_replied else "⏳ 待回复"
+        history_text += f"{i}. [{status}] {msg.content[:50]}{'...' if len(msg.content) > 50 else ''} ({timestamp})\n"
+    
+    if len(messages) > 10:
+        history_text += f"\n... 还有 {len(messages) - 10} 条消息"
+    
+    # 创建操作按钮
+    keyboard = [
+        [InlineKeyboardButton("💬 开始私聊", callback_data=f"start_private_{user_id}")],
+        [InlineKeyboardButton("📊 用户统计", callback_data=f"user_stats_{user_id}")],
+        [InlineKeyboardButton("🔙 返回", callback_data="admin_panel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(history_text, reply_markup=reply_markup)
+    await query.answer("已显示聊天历史")
+
+async def handle_start_private(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """开始与用户私聊"""
+    user = update.effective_user
+    query = update.callback_query
+    
+    if not admin_manager.is_admin(user.id):
+        await query.answer("❌ 您没有权限执行此操作")
+        return
+    
+    # 解析用户ID
+    try:
+        user_id = int(query.data.split('_')[2])
+    except (IndexError, ValueError):
+        await query.answer("❌ 无效的用户ID")
+        return
+    
+    # 检查管理员是否已达到私聊上限
+    admin_info = admin_manager.get_admin_info(user.id)
+    if len(admin_info.private_chats) >= admin_info.max_private_chats:
+        await query.answer("❌ 您已达到私聊上限")
+        return
+    
+    # 创建私聊请求
+    success, message = admin_manager.request_private_chat(
+        User(user_id, "", "", "", "", ""), user.id
+    )
+    
+    if success:
+        # 直接接受私聊
+        admin_manager.accept_private_chat(user.id, user_id)
+        
+        # 通知用户
+        try:
+            await context.bot.send_message(
+                user_id, 
+                f"💬 管理员 {user.first_name} 已开始与您私聊\n\n请直接发送消息"
+            )
+        except Exception as e:
+            logger.error(f"通知用户私聊开始失败: {e}")
+        
+        await query.answer("✅ 私聊已开始")
+        await query.edit_message_text("💬 私聊已开始，请等待用户消息")
+    else:
+        await query.answer(f"❌ {message}")
+
+async def handle_user_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """查看用户统计信息"""
+    user = update.effective_user
+    query = update.callback_query
+    
+    if not admin_manager.is_admin(user.id):
+        await query.answer("❌ 您没有权限执行此操作")
+        return
+    
+    # 解析用户ID
+    try:
+        user_id = int(query.data.split('_')[2])
+    except (IndexError, ValueError):
+        await query.answer("❌ 无效的用户ID")
+        return
+    
+    # 获取用户信息
+    user_info = await db.get_user(user_id)
+    if not user_info:
+        await query.answer("❌ 用户信息不存在")
+        return
+    
+    # 获取用户消息统计
+    messages = await db.get_user_messages(user_id, limit=1000)
+    total_messages = len(messages)
+    replied_messages = len([m for m in messages if m.is_replied])
+    reply_rate = (replied_messages / total_messages * 100) if total_messages > 0 else 0
+    
+    # 计算活跃度
+    if user_info.last_active:
+        last_active = user_info.last_active.split('T')[0] if 'T' in user_info.last_active else user_info.last_active
+    else:
+        last_active = "未知"
+    
+    stats_text = f"📊 用户 {user_info.first_name} (@{user_info.username}) 统计信息\n\n"
+    stats_text += f"🆔 用户ID: {user_id}\n"
+    stats_text += f"📅 加入时间: {user_info.join_date.split('T')[0] if 'T' in user_info.join_date else user_info.join_date}\n"
+    stats_text += f"🕐 最后活跃: {last_active}\n"
+    stats_text += f"📝 总消息数: {total_messages}\n"
+    stats_text += f"✅ 已回复: {replied_messages}\n"
+    stats_text += f"📈 回复率: {reply_rate:.1f}%\n"
+    stats_text += f"🚫 是否被封禁: {'是' if user_info.is_blocked else '否'}\n"
+    
+    if user_info.is_blocked:
+        stats_text += f"🚫 封禁原因: {user_info.block_reason}\n"
+    
+    # 创建操作按钮
+    keyboard = [
+        [InlineKeyboardButton("💬 开始私聊", callback_data=f"start_private_{user_id}")],
+        [InlineKeyboardButton("📋 查看历史", callback_data=f"history_{user_id}")],
+        [InlineKeyboardButton("🔙 返回", callback_data="admin_panel")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(stats_text, reply_markup=reply_markup)
+    await query.answer("已显示用户统计")
+
+async def handle_update_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """检查更新"""
+    user = update.effective_user
+    
+    if not admin_manager.is_super_admin(user.id):
+        await update.message.reply_text("❌ 只有超级管理员可以检查更新")
+        return
+    
+    await update.message.reply_text("🔄 正在检查更新...")
+    
+    try:
+        update_result = await update_manager.check_for_updates()
+        
+        if update_result.has_update:
+            update_text = f"🆕 发现新版本!\n\n"
+            update_text += f"📱 当前版本: {update_result.current_version}\n"
+            update_text += f"🆙 最新版本: {update_result.latest_version}\n"
+            update_text += f"📝 更新说明: {update_result.description}\n"
+            update_text += f"🔗 下载地址: {update_result.download_url}\n"
+            update_text += f"📅 发布日期: {update_result.release_date}\n"
+            update_text += f"⚠️ 强制更新: {'是' if update_result.is_forced else '否'}\n"
+            
+            if update_result.changelog:
+                update_text += f"\n📋 更新日志:\n{update_result.changelog}"
+            
+            # 创建更新按钮
+            keyboard = [
+                [InlineKeyboardButton("🔄 立即更新", callback_data="perform_update")],
+                [InlineKeyboardButton("📋 更新详情", callback_data="update_details")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(update_text, reply_markup=reply_markup)
+        else:
+            await update.message.reply_text("✅ 当前已是最新版本")
+            
+    except Exception as e:
+        logger.error(f"检查更新失败: {e}")
+        await update.message.reply_text("❌ 检查更新失败")
+
+async def handle_perform_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """执行更新"""
+    user = update.effective_user
+    query = update.callback_query
+    
+    if not admin_manager.is_super_admin(user.id):
+        await query.answer("❌ 只有超级管理员可以执行更新")
+        return
+    
+    await query.answer("🔄 开始执行更新...")
+    
+    try:
+        # 获取最新更新信息
+        update_result = await update_manager.check_for_updates()
+        if not update_result.has_update:
+            await query.edit_message_text("❌ 没有可用的更新")
+            return
+        
+        # 执行更新
+        success = await update_manager.perform_update(update_result)
+        
+        if success:
+            await query.edit_message_text("✅ 更新完成！机器人将在重启后生效")
+        else:
+            await query.edit_message_text("❌ 更新失败，请检查日志")
+            
+    except Exception as e:
+        logger.error(f"执行更新失败: {e}")
+        await query.edit_message_text("❌ 执行更新失败")
+
+async def handle_generate_install_script(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """生成一键安装脚本"""
+    user = update.effective_user
+    
+    if not admin_manager.is_super_admin(user.id):
+        await update.message.reply_text("❌ 只有超级管理员可以生成安装脚本")
+        return
+    
+    # 创建脚本选择按钮
+    keyboard = [
+        [InlineKeyboardButton("🐧 Linux安装脚本", callback_data="script_linux")],
+        [InlineKeyboardButton("🪟 Windows安装脚本", callback_data="script_windows")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        "🔧 选择要生成的安装脚本类型:",
+        reply_markup=reply_markup
+    )
+
+async def handle_script_generation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """处理脚本生成请求"""
+    user = update.effective_user
+    query = update.callback_query
+    
+    if not admin_manager.is_super_admin(user.id):
+        await query.answer("❌ 只有超级管理员可以生成安装脚本")
+        return
+    
+    platform = query.data.split('_')[1]
+    
+    try:
+        # 生成脚本
+        script_content = update_manager.get_update_script(platform)
+        
+        # 保存脚本文件
+        filename = f"install_telegram_bot_{platform}.{'sh' if platform == 'linux' else 'bat'}"
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(script_content)
+        
+        # 发送脚本文件
+        await context.bot.send_document(
+            chat_id=user.id,
+            document=open(filename, 'rb'),
+            caption=f"🔧 {platform.title()} 一键安装脚本已生成\n\n使用方法:\n1. 下载脚本文件\n2. 设置执行权限 (Linux: chmod +x)\n3. 运行脚本"
+        )
+        
+        # 清理临时文件
+        os.remove(filename)
+        
+        await query.answer("✅ 安装脚本已生成")
+        
+    except Exception as e:
+        logger.error(f"生成安装脚本失败: {e}")
+        await query.answer("❌ 生成脚本失败")

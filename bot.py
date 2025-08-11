@@ -17,7 +17,10 @@ from handlers import (
     handle_start, handle_help, handle_echo, handle_photo, handle_video,
     handle_audio, handle_document, handle_voice, handle_contact,
     handle_location, handle_sticker, handle_animation, handle_contact_callback,
-    handle_admin, handle_chat, handle_stats, handle_addadmin, handle_removeadmin
+    handle_admin, handle_chat, handle_stats, handle_addadmin, handle_removeadmin,
+    handle_reply_message, handle_admin_reply, handle_view_history, 
+    handle_start_private, handle_user_stats, handle_update_check,
+    handle_perform_update, handle_generate_install_script, handle_script_generation
 )
 
 # 配置日志
@@ -46,6 +49,10 @@ class TelegramBot:
         self.application.add_handler(CommandHandler("stats", handle_stats))
         self.application.add_handler(CommandHandler("addadmin", handle_addadmin))
         self.application.add_handler(CommandHandler("removeadmin", handle_removeadmin))
+        
+        # 新增的管理员功能命令
+        self.application.add_handler(CommandHandler("update", handle_update_check))
+        self.application.add_handler(CommandHandler("script", handle_generate_install_script))
 
         # Multimedia message handlers
         self.application.add_handler(MessageHandler(filters.PHOTO, handle_photo))

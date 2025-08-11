@@ -27,6 +27,14 @@ SUPPORTED_VIDEO_FORMATS = ['.mp4', '.avi', '.mov', '.mkv', '.webm']
 SUPPORTED_AUDIO_FORMATS = ['.mp3', '.wav', '.ogg', '.m4a', '.flac']
 SUPPORTED_DOCUMENT_FORMATS = ['.pdf', '.doc', '.docx', '.txt', '.zip', '.rar']
 
+# 数据库配置
+DATABASE_URL = os.getenv('DATABASE_URL', 'data/bot.db')
+
+# 更新配置
+UPDATE_CHECK_URL = os.getenv('UPDATE_CHECK_URL', '')
+AUTO_UPDATE = os.getenv('AUTO_UPDATE', 'false').lower() == 'true'
+UPDATE_INTERVAL = int(os.getenv('UPDATE_INTERVAL', '3600'))
+
 # 确保上传目录存在
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 

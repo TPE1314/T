@@ -22,6 +22,12 @@
 - 用户交互式按钮
 - 详细的文件信息显示
 - 支持轮询和Webhook两种模式
+- **多管理员支持**: 支持多个管理员同时管理机器人
+- **私聊选择功能**: 用户可以选择特定管理员进行私聊
+- **管理员回复功能**: 管理员可以直接回复用户消息
+- **数据库支持**: 使用SQLite数据库存储用户、消息和回复信息
+- **云更新系统**: 支持在线检查和自动更新
+- **一键安装脚本**: 生成Linux和Windows平台的安装脚本
 
 ## 🚀 快速开始
 
@@ -69,11 +75,19 @@ telegram-bot/
 ├── handlers.py         # 消息处理器
 ├── config.py           # 配置文件
 ├── utils.py            # 工具函数
+├── admin_manager.py    # 管理员管理器
+├── database.py         # 数据库管理
+├── update_manager.py   # 更新管理器
 ├── webhook_server.py   # Webhook服务器
 ├── requirements.txt    # Python依赖
 ├── env_example.txt     # 环境变量示例
 ├── README.md          # 项目说明
-└── uploads/           # 文件上传目录
+├── start_bot.py       # 启动脚本
+├── quick_start.sh     # Linux/macOS快速启动脚本
+├── quick_start.bat    # Windows快速启动脚本
+├── uploads/           # 文件上传目录
+├── data/              # 数据库目录
+└── updates/           # 更新文件目录
 ```
 
 ## ⚙️ 配置说明
@@ -87,6 +101,14 @@ telegram-bot/
 | `WEBHOOK_PORT` | Webhook端口 | 8443 |
 | `UPLOAD_FOLDER` | 文件保存目录 | ./uploads |
 | `MAX_FILE_SIZE` | 最大文件大小(MB) | 50 |
+| `ADMIN_IDS` | 管理员用户ID列表 | 必需 |
+| `SUPER_ADMIN_ID` | 超级管理员用户ID | 必需 |
+| `ENABLE_PRIVATE_CHAT` | 启用私聊功能 | true |
+| `MAX_PRIVATE_CHATS_PER_ADMIN` | 每个管理员最大私聊数 | 10 |
+| `DATABASE_URL` | 数据库文件路径 | data/bot.db |
+| `UPDATE_CHECK_URL` | 更新检查URL | 可选 |
+| `AUTO_UPDATE` | 自动更新 | false |
+| `UPDATE_INTERVAL` | 更新检查间隔(秒) | 3600 |
 
 ### 支持的文件格式
 
@@ -109,6 +131,15 @@ telegram-bot/
 - `/help` - 显示帮助信息
 - `/status` - 显示机器人状态
 - `/info` - 显示功能信息
+
+### 管理员命令
+- `/admin` - 管理员面板
+- `/chat` - 私聊管理
+- `/stats` - 统计信息
+- `/addadmin` - 添加管理员
+- `/removeadmin` - 移除管理员
+- `/update` - 检查更新（超级管理员）
+- `/script` - 生成安装脚本（超级管理员）
 
 ### 发送多媒体
 1. 直接发送图片、视频、音频等文件
@@ -208,6 +239,14 @@ grep ERROR bot.log
 ```
 
 ## 📝 更新日志
+
+### v2.0.0
+- 新增多管理员支持
+- 新增私聊选择功能
+- 新增管理员回复功能
+- 新增数据库支持
+- 新增云更新系统
+- 新增一键安装脚本生成
 
 ### v1.0.0
 - 初始版本发布

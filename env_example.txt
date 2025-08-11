@@ -9,9 +9,40 @@ WEBHOOK_PORT=8443
 UPLOAD_FOLDER=./uploads
 MAX_FILE_SIZE=50
 
+# 管理员配置
+ADMIN_IDS=123456789,987654321
+SUPER_ADMIN_ID=123456789
+
+# 私聊配置
+ENABLE_PRIVATE_CHAT=true
+MAX_PRIVATE_CHATS_PER_ADMIN=10
+
+# 数据库配置
+DATABASE_URL=data/bot.db
+
+# 更新配置
+UPDATE_CHECK_URL=https://your-update-server.com/updates
+AUTO_UPDATE=false
+UPDATE_INTERVAL=3600
+
+# 支持的文件格式
+SUPPORTED_PHOTO_FORMATS=jpg,jpeg,png,gif
+SUPPORTED_VIDEO_FORMATS=mp4,avi,mov
+SUPPORTED_AUDIO_FORMATS=mp3,wav
+SUPPORTED_DOCUMENT_FORMATS=pdf,doc,docx,txt
+
 # 说明:
 # 1. BOT_TOKEN: 从 @BotFather 获取的机器人令牌
 # 2. WEBHOOK_URL: 如果使用Webhook模式，设置为你的域名
 # 3. WEBHOOK_PORT: Webhook监听的端口
 # 4. UPLOAD_FOLDER: 文件保存的目录
 # 5. MAX_FILE_SIZE: 最大文件大小(MB)
+# 6. ADMIN_IDS: 管理员用户ID列表，用逗号分隔
+# 7. SUPER_ADMIN_ID: 超级管理员用户ID
+# 8. ENABLE_PRIVATE_CHAT: 是否启用私聊功能
+# 9. MAX_PRIVATE_CHATS_PER_ADMIN: 每个管理员最多私聊数量
+# 10. DATABASE_URL: 数据库文件路径
+# 11. UPDATE_CHECK_URL: 更新检查服务器地址
+# 12. AUTO_UPDATE: 是否启用自动更新
+# 13. UPDATE_INTERVAL: 更新检查间隔(秒)
+# 14. SUPPORTED_*_FORMATS: 支持的文件格式列表
