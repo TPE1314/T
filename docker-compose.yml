@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  telegram-bot:
+    build: .
+    container_name: telegram-bot
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - UPLOAD_FOLDER=./uploads
+      - MAX_FILE_SIZE=50
+    volumes:
+      - ./uploads:/app/uploads
+      - ./.env:/app/.env:ro
+    ports:
+      - "8443:8443"  # Webhook端口
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8443/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Webhook模式（可选）
+  telegram-bot-webhook:
+    build: .
+    container_name: telegram-bot-webhook
+    restart: unless-stopped
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - WEBHOOK_URL=${WEBHOOK_URL}
+      - WEBHOOK_PORT=8443
+      - UPLOAD_FOLDER=./uploads
+      - MAX_FILE_SIZE=50
+    volumes:
+      - ./uploads:/app/uploads
+      - ./.env:/app/.env:ro
+    ports:
+      - "8444:8443"  # 使用不同端口避免冲突
+    networks:
+      - bot-network
+    command: ["python", "start_bot.py", "--mode", "webhook"]
+    profiles:
+      - webhook
+
+networks:
+  bot-network:
+    driver: bridge
+
+volumes:
+  uploads:
+    driver: local
