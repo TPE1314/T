@@ -1,0 +1,17 @@
+# Telegram Bot配置
+BOT_TOKEN=your_bot_token_here
+
+# Webhook配置 (可选，如果使用轮询模式则不需要)
+WEBHOOK_URL=https://your-domain.com/webhook
+WEBHOOK_PORT=8443
+
+# 文件存储配置
+UPLOAD_FOLDER=./uploads
+MAX_FILE_SIZE=50
+
+# 说明:
+# 1. BOT_TOKEN: 从 @BotFather 获取的机器人令牌
+# 2. WEBHOOK_URL: 如果使用Webhook模式，设置为你的域名
+# 3. WEBHOOK_PORT: Webhook监听的端口
+# 4. UPLOAD_FOLDER: 文件保存的目录
+# 5. MAX_FILE_SIZE: 最大文件大小(MB)
