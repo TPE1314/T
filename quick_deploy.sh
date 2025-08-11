@@ -31,19 +31,31 @@ log_error() {
 
 # 检查是否为root用户
 if [ "$EUID" -eq 0 ]; then
-    log_error "请不要使用root用户运行此脚本"
-    exit 1
+    log_warning "检测到root用户，将使用root权限进行部署"
+    log_info "注意：生产环境建议使用普通用户+sudo权限"
+    read -p "是否继续？(y/N): " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "部署已取消"
+        exit 0
+    fi
+    # 设置root用户相关变量
+    PROJECT_DIR="/root/telegram-bot"
+    SUDO_CMD=""
+else
+    PROJECT_DIR="/home/$(whoami)/telegram-bot"
+    SUDO_CMD="sudo"
 fi
 
 log_info "🚀 开始快速部署..."
 
 # 更新系统
 log_info "更新系统包..."
-sudo apt update && sudo apt upgrade -y
+$SUDO_CMD apt update && $SUDO_CMD apt upgrade -y
 
 # 安装基础依赖
 log_info "安装基础依赖..."
-sudo apt install -y \
+$SUDO_CMD apt install -y \
     python3 \
     python3-pip \
     python3-venv \
@@ -57,19 +69,18 @@ sudo apt install -y \
 
 # 配置Redis
 log_info "配置Redis..."
-sudo sed -i 's/bind 127.0.0.1/bind 0.0.0.0/' /etc/redis/redis.conf
-sudo systemctl enable redis-server
-sudo systemctl start redis-server
+$SUDO_CMD sed -i 's/bind 127.0.0.1/bind 0.0.0.0/' /etc/redis/redis.conf
+$SUDO_CMD systemctl enable redis-server
+$SUDO_CMD systemctl start redis-server
 
 # 配置Nginx
 log_info "配置Nginx..."
-sudo systemctl enable nginx
-sudo systemctl start nginx
+$SUDO_CMD systemctl enable nginx
+$SUDO_CMD systemctl start nginx
 
 # 创建项目目录
-PROJECT_DIR="/home/$(whoami)/telegram-bot"
 log_info "创建项目目录: $PROJECT_DIR"
-mkdir -p $PROJECT_DIR/{logs,uploads,data,backups}
+$SUDO_CMD mkdir -p $PROJECT_DIR/{logs,uploads,data,backups}
 
 # 复制项目文件
 log_info "复制项目文件..."
@@ -85,9 +96,9 @@ pip install -r requirements.txt
 
 # 创建启动脚本
 log_info "创建启动脚本..."
-cat > start_bot.sh << 'EOF'
+cat > start_bot.sh << EOF
 #!/bin/bash
-cd /home/$(whoami)/telegram-bot
+cd $PROJECT_DIR
 source venv/bin/activate
 python bot.py
 EOF
@@ -96,14 +107,14 @@ chmod +x start_bot.sh
 
 # 创建系统服务
 log_info "创建系统服务..."
-sudo tee /etc/systemd/system/telegram-bot.service > /dev/null <<EOF
+$SUDO_CMD tee /etc/systemd/system/telegram-bot.service > /dev/null <<EOF
 [Unit]
 Description=Telegram Bot Service
 After=network.target redis-server.service
 
 [Service]
 Type=simple
-User=$(whoami)
+User=$([ "$EUID" -eq 0 ] && echo "root" || echo "$(whoami)")
 WorkingDirectory=$PROJECT_DIR
 ExecStart=$PROJECT_DIR/venv/bin/python $PROJECT_DIR/bot.py
 Restart=always
@@ -114,26 +125,26 @@ WantedBy=multi-user.target
 EOF
 
 # 启用并启动服务
-sudo systemctl daemon-reload
-sudo systemctl enable telegram-bot
-sudo systemctl start telegram-bot
+$SUDO_CMD systemctl daemon-reload
+$SUDO_CMD systemctl enable telegram-bot
+$SUDO_CMD systemctl start telegram-bot
 
 # 配置防火墙
 log_info "配置防火墙..."
-sudo ufw --force enable
-sudo ufw allow ssh
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
+$SUDO_CMD ufw --force enable
+$SUDO_CMD ufw allow ssh
+$SUDO_CMD ufw allow 80/tcp
+$SUDO_CMD ufw allow 443/tcp
 
 log_success "🎉 快速部署完成！"
 echo ""
 echo "📁 项目目录: $PROJECT_DIR"
 echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}')"
 echo "🔧 管理命令:"
-echo "   - 查看状态: sudo systemctl status telegram-bot"
-echo "   - 启动服务: sudo systemctl start telegram-bot"
-echo "   - 停止服务: sudo systemctl stop telegram-bot"
-echo "   - 查看日志: sudo journalctl -u telegram-bot -f"
+echo "   - 查看状态: $SUDO_CMD systemctl status telegram-bot"
+echo "   - 启动服务: $SUDO_CMD systemctl start telegram-bot"
+echo "   - 停止服务: $SUDO_CMD systemctl stop telegram-bot"
+echo "   - 查看日志: $SUDO_CMD journalctl -u telegram-bot -f"
 echo ""
 echo "⚠️  下一步操作:"
 echo "1. 编辑配置文件: $PROJECT_DIR/config.py"

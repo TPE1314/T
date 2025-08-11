@@ -23,6 +23,9 @@ PROJECT_DIR="/home/$USER_NAME/$PROJECT_NAME"
 SERVICE_USER="botuser"
 SERVICE_GROUP="botgroup"
 
+# 根据用户类型决定是否使用sudo
+SUDO_CMD="sudo"
+
 # 日志函数
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -47,9 +50,20 @@ log_step() {
 # 检查是否为root用户
 check_root() {
     if [ "$EUID" -eq 0 ]; then
-        log_error "请不要使用root用户运行此脚本"
-        log_info "请使用普通用户运行，脚本会自动请求sudo权限"
-        exit 1
+        log_warning "检测到root用户，将使用root权限进行部署"
+        log_info "注意：生产环境建议使用普通用户+sudo权限"
+        read -p "是否继续？(y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "部署已取消"
+            exit 0
+        fi
+        # 设置root用户相关变量
+        USER_NAME="root"
+        PROJECT_DIR="/root/$PROJECT_NAME"
+        SERVICE_USER="root"
+        SERVICE_GROUP="root"
+        SUDO_CMD=""
     fi
 }
 
@@ -81,8 +95,8 @@ check_ubuntu_version() {
 update_system() {
     log_step "更新系统包..."
     
-    sudo apt update
-    sudo apt upgrade -y
+    $SUDO_CMD apt update
+    $SUDO_CMD apt upgrade -y
     
     log_success "系统包更新完成"
 }
@@ -91,7 +105,7 @@ update_system() {
 install_basic_deps() {
     log_step "安装基础依赖包..."
     
-    sudo apt install -y \
+    $SUDO_CMD apt install -y \
         curl \
         wget \
         git \
@@ -120,7 +134,7 @@ install_basic_deps() {
 install_python_deps() {
     log_step "安装Python相关依赖..."
     
-    sudo apt install -y \
+    $SUDO_CMD apt install -y \
         python3 \
         python3-pip \
         python3-venv \
@@ -161,16 +175,16 @@ install_python_deps() {
 install_redis() {
     log_step "安装Redis..."
     
-    sudo apt install -y redis-server
+    $SUDO_CMD apt install -y redis-server
     
     # 配置Redis
-    sudo sed -i 's/bind 127.0.0.1/bind 0.0.0.0/' /etc/redis/redis.conf
-    sudo sed -i 's/# requirepass foobared/requirepass botredis123/' /etc/redis/redis.conf
-    sudo sed -i 's/appendonly no/appendonly yes/' /etc/redis/redis.conf
+    $SUDO_CMD sed -i 's/bind 127.0.0.1/bind 0.0.0.0/' /etc/redis/redis.conf
+    $SUDO_CMD sed -i 's/# requirepass foobared/requirepass botredis123/' /etc/redis/redis.conf
+    $SUDO_CMD sed -i 's/appendonly no/appendonly yes/' /etc/redis/redis.conf
     
     # 启动Redis
-    sudo systemctl enable redis-server
-    sudo systemctl start redis-server
+    $SUDO_CMD systemctl enable redis-server
+    $SUDO_CMD systemctl start redis-server
     
     log_success "Redis安装完成"
 }
@@ -179,10 +193,10 @@ install_redis() {
 install_nginx() {
     log_step "安装Nginx..."
     
-    sudo apt install -y nginx
+    $SUDO_CMD apt install -y nginx
     
     # 创建Nginx配置
-    sudo tee /etc/nginx/sites-available/$PROJECT_NAME > /dev/null <<EOF
+    $SUDO_CMD tee /etc/nginx/sites-available/$PROJECT_NAME > /dev/null <<EOF
 server {
     listen 80;
     server_name _;
@@ -230,15 +244,15 @@ server {
 EOF
     
     # 启用站点
-    sudo ln -sf /etc/nginx/sites-available/$PROJECT_NAME /etc/nginx/sites-enabled/
-    sudo rm -f /etc/nginx/sites-enabled/default
+    $SUDO_CMD ln -sf /etc/nginx/sites-available/$PROJECT_NAME /etc/nginx/sites-enabled/
+    $SUDO_CMD rm -f /etc/nginx/sites-enabled/default
     
     # 测试配置
-    sudo nginx -t
+    $SUDO_CMD nginx -t
     
     # 启动Nginx
-    sudo systemctl enable nginx
-    sudo systemctl start nginx
+    $SUDO_CMD systemctl enable nginx
+    $SUDO_CMD systemctl start nginx
     
     log_success "Nginx安装完成"
 }
@@ -250,16 +264,16 @@ install_mysql() {
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         log_step "安装MySQL..."
         
-        sudo apt install -y mysql-server
+        $SUDO_CMD apt install -y mysql-server
         
         # 安全配置
-        sudo mysql_secure_installation
+        $SUDO_CMD mysql_secure_installation
         
         # 创建数据库和用户
-        sudo mysql -e "CREATE DATABASE IF NOT EXISTS botdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
-        sudo mysql -e "CREATE USER IF NOT EXISTS 'botuser'@'localhost' IDENTIFIED BY 'botpass123';"
-        sudo mysql -e "GRANT ALL PRIVILEGES ON botdb.* TO 'botuser'@'localhost';"
-        sudo mysql -e "FLUSH PRIVILEGES;"
+        $SUDO_CMD mysql -e "CREATE DATABASE IF NOT EXISTS botdb CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+        $SUDO_CMD mysql -e "CREATE USER IF NOT EXISTS 'botuser'@'localhost' IDENTIFIED BY 'botpass123';"
+        $SUDO_CMD mysql -e "GRANT ALL PRIVILEGES ON botdb.* TO 'botuser'@'localhost';"
+        $SUDO_CMD mysql -e "FLUSH PRIVILEGES;"
         
         log_success "MySQL安装完成"
     fi
@@ -273,15 +287,15 @@ install_mongodb() {
         log_step "安装MongoDB..."
         
         # 添加MongoDB官方源
-        wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | sudo apt-key add -
-        echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+        wget -qO - https://www.mongodb.org/static/pgp/server-6.0.asc | $SUDO_CMD apt-key add -
+        echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu focal/mongodb-org/6.0 multiverse" | $SUDO_CMD tee /etc/apt/sources.list.d/mongodb-org-6.0.list
         
-        sudo apt update
-        sudo apt install -y mongodb-org
+        $SUDO_CMD apt update
+        $SUDO_CMD apt install -y mongodb-org
         
         # 启动MongoDB
-        sudo systemctl enable mongod
-        sudo systemctl start mongod
+        $SUDO_CMD systemctl enable mongod
+        $SUDO_CMD systemctl start mongod
         
         log_success "MongoDB安装完成"
     fi
@@ -296,18 +310,18 @@ install_docker() {
         
         # 安装Docker
         curl -fsSL https://get.docker.com -o get-docker.sh
-        sudo sh get-docker.sh
+        $SUDO_CMD sh get-docker.sh
         
         # 添加用户到docker组
-        sudo usermod -aG docker $USER_NAME
+        $SUDO_CMD usermod -aG docker $USER_NAME
         
         # 安装Docker Compose
-        sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-        sudo chmod +x /usr/local/bin/docker-compose
+        $SUDO_CMD curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -m)" -o /usr/local/bin/docker-compose
+        $SUDO_CMD chmod +x /usr/local/bin/docker-compose
         
         # 启动Docker
-        sudo systemctl enable docker
-        sudo systemctl start docker
+        $SUDO_CMD systemctl enable docker
+        $SUDO_CMD systemctl start docker
         
         log_success "Docker安装完成"
         log_warning "请重新登录以使docker组权限生效"
@@ -319,8 +333,8 @@ create_project_user() {
     log_step "创建项目用户..."
     
     if ! id "$SERVICE_USER" &>/dev/null; then
-        sudo useradd -r -s /bin/bash -d $PROJECT_DIR $SERVICE_USER
-        sudo usermod -aG $SERVICE_USER $USER_NAME
+        $SUDO_CMD useradd -r -s /bin/bash -d $PROJECT_DIR $SERVICE_USER
+        $SUDO_CMD usermod -aG $SERVICE_USER $USER_NAME
         log_success "项目用户创建完成: $SERVICE_USER"
     else
         log_info "项目用户已存在: $SERVICE_USER"
@@ -331,9 +345,9 @@ create_project_user() {
 create_project_dirs() {
     log_step "创建项目目录..."
     
-    sudo mkdir -p $PROJECT_DIR/{app,static,uploads,data,logs,backups,config,ssl}
-    sudo chown -R $SERVICE_USER:$SERVICE_USER $PROJECT_DIR
-    sudo chmod -R 755 $PROJECT_DIR
+    $SUDO_CMD mkdir -p $PROJECT_DIR/{app,static,uploads,data,logs,backups,config,ssl}
+    $SUDO_CMD chown -R $SERVICE_USER:$SERVICE_USER $PROJECT_DIR
+    $SUDO_CMD chmod -R 755 $PROJECT_DIR
     
     log_success "项目目录创建完成"
 }
@@ -343,8 +357,8 @@ create_python_env() {
     log_step "创建Python虚拟环境..."
     
     cd $PROJECT_DIR
-    sudo -u $SERVICE_USER python3 -m venv venv
-    sudo -u $SERVICE_USER $PROJECT_DIR/venv/bin/pip install --upgrade pip
+    $SUDO_CMD -u $SERVICE_USER python3 -m venv venv
+    $SUDO_CMD -u $SERVICE_USER $PROJECT_DIR/venv/bin/pip install --upgrade pip
     
     log_success "Python虚拟环境创建完成"
 }
@@ -354,7 +368,7 @@ install_python_requirements() {
     log_step "安装Python依赖..."
     
     cd $PROJECT_DIR
-    sudo -u $SERVICE_USER $PROJECT_DIR/venv/bin/pip install -r requirements.txt
+    $SUDO_CMD -u $SERVICE_USER $PROJECT_DIR/venv/bin/pip install -r requirements.txt
     
     log_success "Python依赖安装完成"
 }
@@ -363,7 +377,7 @@ install_python_requirements() {
 create_systemd_service() {
     log_step "创建系统服务..."
     
-    sudo tee /etc/systemd/system/$PROJECT_NAME.service > /dev/null <<EOF
+    $SUDO_CMD tee /etc/systemd/system/$PROJECT_NAME.service > /dev/null <<EOF
 [Unit]
 Description=Telegram Bot Service
 After=network.target redis-server.service
@@ -395,8 +409,8 @@ WantedBy=multi-user.target
 EOF
     
     # 重新加载systemd
-    sudo systemctl daemon-reload
-    sudo systemctl enable $PROJECT_NAME
+    $SUDO_CMD systemctl daemon-reload
+    $SUDO_CMD systemctl enable $PROJECT_NAME
     
     log_success "系统服务创建完成"
 }
@@ -405,7 +419,7 @@ EOF
 create_supervisor_config() {
     log_step "创建Supervisor配置..."
     
-    sudo tee /etc/supervisor/conf.d/$PROJECT_NAME.conf > /dev/null <<EOF
+    $SUDO_CMD tee /etc/supervisor/conf.d/$PROJECT_NAME.conf > /dev/null <<EOF
 [program:$PROJECT_NAME]
 command=$PROJECT_DIR/venv/bin/python $PROJECT_DIR/bot.py
 directory=$PROJECT_DIR
@@ -423,8 +437,8 @@ environment=PATH="$PROJECT_DIR/venv/bin"
 EOF
     
     # 重新加载Supervisor
-    sudo supervisorctl reread
-    sudo supervisorctl update
+    $SUDO_CMD supervisorctl reread
+    $SUDO_CMD supervisorctl update
     
     log_success "Supervisor配置创建完成"
 }
@@ -433,13 +447,13 @@ EOF
 configure_firewall() {
     log_step "配置防火墙..."
     
-    sudo ufw --force enable
-    sudo ufw default deny incoming
-    sudo ufw default allow outgoing
-    sudo ufw allow ssh
-    sudo ufw allow 80/tcp
-    sudo ufw allow 443/tcp
-    sudo ufw allow 8443/tcp
+    $SUDO_CMD ufw --force enable
+    $SUDO_CMD ufw default deny incoming
+    $SUDO_CMD ufw default allow outgoing
+    $SUDO_CMD ufw allow ssh
+    $SUDO_CMD ufw allow 80/tcp
+    $SUDO_CMD ufw allow 443/tcp
+    $SUDO_CMD ufw allow 8443/tcp
     
     log_success "防火墙配置完成"
 }
@@ -448,7 +462,7 @@ configure_firewall() {
 configure_logrotate() {
     log_step "配置日志轮转..."
     
-    sudo tee /etc/logrotate.d/$PROJECT_NAME > /dev/null <<EOF
+    $SUDO_CMD tee /etc/logrotate.d/$PROJECT_NAME > /dev/null <<EOF
 $PROJECT_DIR/logs/*.log {
     daily
     missingok
@@ -470,7 +484,7 @@ EOF
 create_backup_script() {
     log_step "创建备份脚本..."
     
-    sudo tee $PROJECT_DIR/backup.sh > /dev/null <<EOF
+    $SUDO_CMD tee $PROJECT_DIR/backup.sh > /dev/null <<EOF
 #!/bin/bash
 # 备份脚本
 
@@ -487,11 +501,11 @@ find \$BACKUP_DIR -name "backup_*.tar.gz" -mtime +30 -delete
 echo "备份完成: \$BACKUP_FILE"
 EOF
     
-    sudo chmod +x $PROJECT_DIR/backup.sh
-    sudo chown $SERVICE_USER:$SERVICE_USER $PROJECT_DIR/backup.sh
+    $SUDO_CMD chmod +x $PROJECT_DIR/backup.sh
+    $SUDO_CMD chown $SERVICE_USER:$SERVICE_USER $PROJECT_DIR/backup.sh
     
     # 添加到crontab
-    (sudo crontab -l 2>/dev/null; echo "0 2 * * * $PROJECT_DIR/backup.sh") | sudo crontab -
+    ($SUDO_CMD crontab -l 2>/dev/null; echo "0 2 * * * $PROJECT_DIR/backup.sh") | $SUDO_CMD crontab -
     
     log_success "备份脚本创建完成"
 }
@@ -500,7 +514,7 @@ EOF
 create_monitoring_script() {
     log_step "创建监控脚本..."
     
-    sudo tee $PROJECT_DIR/monitor.sh > /dev/null <<EOF
+    $SUDO_CMD tee $PROJECT_DIR/monitor.sh > /dev/null <<EOF
 #!/bin/bash
 # 监控脚本
 
@@ -532,11 +546,11 @@ if [ \$MEM_USAGE -gt 80 ]; then
 fi
 EOF
     
-    sudo chmod +x $PROJECT_DIR/monitor.sh
-    sudo chown $SERVICE_USER:$SERVICE_USER $PROJECT_DIR/monitor.sh
+    $SUDO_CMD chmod +x $PROJECT_DIR/monitor.sh
+    $SUDO_CMD chown $SERVICE_USER:$SERVICE_USER $PROJECT_DIR/monitor.sh
     
     # 添加到crontab，每5分钟检查一次
-    (sudo crontab -l 2>/dev/null; echo "*/5 * * * * $PROJECT_DIR/monitor.sh") | sudo crontab -
+    ($SUDO_CMD crontab -l 2>/dev/null; echo "*/5 * * * * $PROJECT_DIR/monitor.sh") | $SUDO_CMD crontab -
     
     log_success "监控脚本创建完成"
 }
@@ -549,8 +563,8 @@ copy_project_files() {
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     # 复制项目文件
-    sudo cp -r $SCRIPT_DIR/* $PROJECT_DIR/
-    sudo chown -R $SERVICE_USER:$SERVICE_USER $PROJECT_DIR
+    $SUDO_CMD cp -r $SCRIPT_DIR/* $PROJECT_DIR/
+    $SUDO_CMD chown -R $SERVICE_USER:$SERVICE_USER $PROJECT_DIR
     
     log_success "项目文件复制完成"
 }
@@ -559,9 +573,9 @@ copy_project_files() {
 start_services() {
     log_step "启动服务..."
     
-    sudo systemctl start $PROJECT_NAME
-    sudo systemctl start redis-server
-    sudo systemctl start nginx
+    $SUDO_CMD systemctl start $PROJECT_NAME
+    $SUDO_CMD systemctl start redis-server
+    $SUDO_CMD systemctl start nginx
     
     # 等待服务启动
     sleep 5
@@ -571,7 +585,7 @@ start_services() {
         log_success "Bot服务启动成功"
     else
         log_error "Bot服务启动失败"
-        sudo systemctl status $PROJECT_NAME
+        $SUDO_CMD systemctl status $PROJECT_NAME
     fi
     
     if systemctl is-active --quiet redis-server; then
@@ -595,11 +609,11 @@ show_deployment_info() {
     echo "👤 服务用户: $SERVICE_USER"
     echo "🌐 访问地址: http://$(hostname -I | awk '{print $1}')"
     echo "🔧 管理命令:"
-    echo "   - 查看状态: sudo systemctl status $PROJECT_NAME"
-    echo "   - 启动服务: sudo systemctl start $PROJECT_NAME"
-    echo "   - 停止服务: sudo systemctl stop $PROJECT_NAME"
-    echo "   - 重启服务: sudo systemctl restart $PROJECT_NAME"
-    echo "   - 查看日志: sudo journalctl -u $PROJECT_NAME -f"
+    echo "   - 查看状态: $SUDO_CMD systemctl status $PROJECT_NAME"
+    echo "   - 启动服务: $SUDO_CMD systemctl start $PROJECT_NAME"
+    echo "   - 停止服务: $SUDO_CMD systemctl stop $PROJECT_NAME"
+    echo "   - 重启服务: $SUDO_CMD systemctl restart $PROJECT_NAME"
+    echo "   - 查看日志: $SUDO_CMD journalctl -u $PROJECT_NAME -f"
     echo "   - 备份数据: $PROJECT_DIR/backup.sh"
     echo ""
     echo "📋 下一步操作:"
